@@ -7,3 +7,4 @@ license     = "BSD-2-Clause"
 readme      = "README.md"
 
 [dependencies]
+rustc-serialize = "^0.3.19"
