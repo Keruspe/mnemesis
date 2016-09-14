@@ -1,0 +1,9 @@
+[package]
+name        = "mnemesis"
+version     = "0.1.0"
+description = "Never forget anything ever again"
+authors     = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
+license     = "BSD-2-Clause"
+readme      = "README.md"
+
+[dependencies]
