@@ -1,8 +1,5 @@
 use clap::{ArgMatches};
-use mnemesis_utils::{prompt_for_input, prompt_for_password};
-use serde_json::{self};
-
-use data::Credentials;
+use mnemesis_utils::{Credentials, prompt_for_input, prompt_for_password, read_credentials, write_credentials};
 
 pub fn _main(args: &ArgMatches) {
     let url         = prompt_for_input("Url: ");
@@ -19,6 +16,10 @@ pub fn _main(args: &ArgMatches) {
         password,
         totp_secret,
     };
+    let path        = args.value_of("PATH").unwrap();
+    let list        = read_credentials(path);
+    let mut list    = list.iter().filter(|ref item| item.url != credentials.url && item.login != credentials.login).collect::<Vec<_>>();
 
-    println!("{:?}", serde_json::to_string(&credentials));
+    list.push(&credentials);
+    write_credentials(path, list);
 }
