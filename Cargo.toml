@@ -6,6 +6,10 @@ authors     = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 license     = "BSD-2-Clause"
 readme      = "README.md"
 
+[[bin]]
+name = "mn"
+path = "src/main.rs"
+
 [lib]
 name = "mnemesis_utils"
 
