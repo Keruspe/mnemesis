@@ -1,10 +1,14 @@
 extern crate file;
+extern crate ring;
 extern crate rpassword;
 extern crate rprompt;
 #[macro_use] extern crate serde_derive;
 extern crate serde_json;
+extern crate username;
 extern crate xdg;
 
+use ring::{aead, digest, pbkdf2, rand};
+use ring::rand::SecureRandom;
 use std::path::PathBuf;
 use xdg::BaseDirectories;
 
@@ -88,5 +92,68 @@ impl MnemesisConfig {
             // FIXME: generate default config or error out?
             secret: "".to_string(),
         })
+    }
+}
+
+struct Crypt {
+    key:  [u8; 32],
+    rand: rand::SystemRandom,
+}
+
+impl Crypt {
+    fn new(passphrase: &str) -> Crypt {
+        let salt      = username::get_user_name().expect("Failed to query username");
+        let mut key   = [0; 32];
+
+        pbkdf2::derive(&digest::SHA512, 100, salt.as_bytes(), passphrase.as_bytes(), &mut key);
+
+        Crypt {
+            key,
+            rand: rand::SystemRandom::new(),
+        }
+    }
+
+    fn nonce(&self) -> Vec<u8> {
+        let mut nonce = vec![0; 12];
+        self.rand.fill(&mut nonce).expect("Failed generating nonce");
+        nonce
+    }
+
+    fn encrypt(&self, data: &str, nonce: &Vec<u8>) -> Vec<u8> {
+        let sealing_key              = aead::SealingKey::new(&aead::CHACHA20_POLY1305, &self.key).expect("Failed creating sealing key");
+        let mut in_out               = data.to_string().into_bytes();
+        let additional_data: [u8; 0] = [];
+
+        for _ in 0..aead::CHACHA20_POLY1305.tag_len() {
+            in_out.push(0);
+        }
+
+        aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut in_out, aead::CHACHA20_POLY1305.tag_len()).map(|len| in_out[..len].to_vec()).expect("Failed sealing data")
+    }
+
+    fn decrypt(&self, mut data: Vec<u8>, nonce: &Vec<u8>) -> String {
+        let opening_key              = aead::OpeningKey::new(&aead::CHACHA20_POLY1305, &self.key).expect("Failed creating opening key");
+        let additional_data: [u8; 0] = [];
+        let decrypted_data           = aead::open_in_place(&opening_key, nonce, &additional_data, 0, &mut data).expect("Failed opening data");
+
+        String::from_utf8(decrypted_data.to_vec()).expect("Failed decoding data")
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_encrypt_decrypt() {
+        let pass  = "This is a nice passphrase.";
+        let c     = Crypt::new(pass);
+        let nonce = c.nonce();
+        let data  = "Very secret data";
+        let e     = c.encrypt(data, &nonce);
+        let e2    = e.clone();
+
+        assert_eq!(c.decrypt(e, &nonce), data);
+        assert_eq!(Crypt::new(pass).decrypt(e2, &nonce), data);
     }
 }
