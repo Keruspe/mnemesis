@@ -26,10 +26,10 @@ pub struct Credentials {
     pub totp_secret: Option<String>
 }
 
-#[derive(Debug)]
 pub struct MnemesisUtils {
     base_dirs: BaseDirectories,
     config:    MnemesisConfig,
+    crypt:     Crypt,
 }
 
 #[derive(Debug,PartialEq,Deserialize,Serialize)]
@@ -41,10 +41,12 @@ impl MnemesisUtils {
     pub fn new() -> MnemesisUtils {
         let base_dirs = BaseDirectories::with_prefix("mnemesis").expect("Failed getting base directories");
         let config    = MnemesisConfig::load(&base_dirs);
+        let crypt     = Crypt::new(&config.secret);
 
         MnemesisUtils {
             base_dirs,
             config,
+            crypt,
         }
     }
 
@@ -65,8 +67,10 @@ impl MnemesisUtils {
 
         if full_path.exists() {
             if full_path.is_file() {
-                let data = file::get_text(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path))).expect(&format!("Failed to read {:?}", full_path));
-                serde_json::from_str::<Vec<Entity>>(&data).expect(&format!("Found garbage in {:?}", full_path))
+                let encrypted_data = file::get(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path))).expect(&format!("Failed to read {:?}", full_path));
+                let nonce          = file::get(full_path.with_extension("nonce").to_str().expect(&format!("{:?} is not valid UTF-8", full_path))).expect(&format!("Failed to read {:?}", full_path));
+                let decrypted_data = self.crypt.decrypt(encrypted_data, &nonce);
+                serde_json::from_str::<Vec<Entity>>(&decrypted_data).expect(&format!("Found garbage in {:?}", full_path))
             } else {
                 panic!("{:?} exists and is not a file", full_path);
             }
@@ -76,9 +80,13 @@ impl MnemesisUtils {
     }
 
     pub fn write_entities(&self, path: &str, entities: Vec<Entity>) {
-        let full_path = self.credentials_directory(path);
+        let full_path      = self.credentials_directory(path);
+        let nonce          = self.crypt.nonce();
+        let decrypted_data = serde_json::to_vec(&entities).expect("Failed to serialize entities");
+        let encrypted_data = self.crypt.encrypt(decrypted_data, &nonce);
 
-        file::put_text(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path)), serde_json::to_string(&entities).expect("Failed to serialize entities")).expect(&format!("Failed to write {:?}", full_path));
+        file::put(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path)), &encrypted_data).expect(&format!("Failed to write {:?}", full_path));
+        file::put(full_path.with_extension("nonce").to_str().expect(&format!("{:?} is not valid UTF-8", full_path)), &nonce).expect(&format!("Failed to write {:?}", full_path));
     }
 }
 
@@ -119,16 +127,15 @@ impl Crypt {
         nonce
     }
 
-    fn encrypt(&self, data: &str, nonce: &Vec<u8>) -> Vec<u8> {
+    fn encrypt(&self, mut data: Vec<u8>, nonce: &Vec<u8>) -> Vec<u8> {
         let sealing_key              = aead::SealingKey::new(&aead::CHACHA20_POLY1305, &self.key).expect("Failed creating sealing key");
-        let mut in_out               = data.to_string().into_bytes();
         let additional_data: [u8; 0] = [];
 
         for _ in 0..aead::CHACHA20_POLY1305.tag_len() {
-            in_out.push(0);
+            data.push(0);
         }
 
-        aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut in_out, aead::CHACHA20_POLY1305.tag_len()).map(|len| in_out[..len].to_vec()).expect("Failed sealing data")
+        aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut data, aead::CHACHA20_POLY1305.tag_len()).map(|len| data[..len].to_vec()).expect("Failed sealing data")
     }
 
     fn decrypt(&self, mut data: Vec<u8>, nonce: &Vec<u8>) -> String {
@@ -150,7 +157,7 @@ mod test {
         let c     = Crypt::new(pass);
         let nonce = c.nonce();
         let data  = "Very secret data";
-        let e     = c.encrypt(data, &nonce);
+        let e     = c.encrypt(data.as_bytes().to_vec(), &nonce);
         let e2    = e.clone();
 
         assert_eq!(c.decrypt(e, &nonce), data);
