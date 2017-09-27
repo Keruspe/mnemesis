@@ -2,6 +2,7 @@ extern crate clap;
 extern crate mnemesis_utils;
 
 mod add;
+mod get;
 
 use clap::{App, Arg, SubCommand};
 
@@ -17,10 +18,16 @@ fn main() {
                     .arg(Arg::with_name("totp")
                          .short("t")
                          .long("totp")))
+        .subcommand(SubCommand::with_name("get")
+                    .about("Get some credentials from the registry")
+                    .arg(Arg::with_name("PATH")
+                         .required(true)))
         .get_matches();
 
     if let Some(sub) = matches.subcommand_matches("add") {
         add::_main(sub);
+    } else if let Some(sub) = matches.subcommand_matches("get") {
+        get::_main(sub);
     } else {
         println!("{}", matches.usage());
     }
