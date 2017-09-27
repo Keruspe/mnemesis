@@ -25,12 +25,22 @@ pub struct Credentials {
 #[derive(Debug)]
 pub struct MnemesisUtils {
     base_dirs: BaseDirectories,
+    config:    MnemesisConfig,
+}
+
+#[derive(Debug,PartialEq,Deserialize,Serialize)]
+struct MnemesisConfig {
+    secret: String,
 }
 
 impl MnemesisUtils {
     pub fn new() -> MnemesisUtils {
+        let base_dirs = BaseDirectories::with_prefix("mnemesis").expect("Failed getting base directories");
+        let config    = MnemesisConfig::load(&base_dirs);
+
         MnemesisUtils {
-            base_dirs: BaseDirectories::with_prefix("mnemesis").expect("Failed getting base directories"),
+            base_dirs,
+            config,
         }
     }
 
@@ -65,5 +75,18 @@ impl MnemesisUtils {
         let full_path = self.credentials_directory(path);
 
         file::put_text(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path)), serde_json::to_string(&entities).expect("Failed to serialize entities")).expect(&format!("Failed to write {:?}", full_path));
+    }
+}
+
+impl MnemesisConfig {
+    pub fn load(base_dirs: &BaseDirectories) -> MnemesisConfig {
+        base_dirs.find_config_file("mnemesis-config.json").and_then(|conf_file| {
+            conf_file.to_str().and_then(|conf_file| file::get_text(conf_file).ok())
+        }).and_then(|conf| {
+            serde_json::from_str::<MnemesisConfig>(&conf).ok()
+        }).unwrap_or(MnemesisConfig {
+            // FIXME: generate default config or error out?
+            secret: "".to_string(),
+        })
     }
 }
