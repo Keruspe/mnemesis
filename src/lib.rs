@@ -9,6 +9,12 @@ use std::path::PathBuf;
 use xdg::BaseDirectories;
 
 #[derive(Debug,PartialEq,Deserialize,Serialize)]
+#[serde(tag = "type")]
+pub enum Entity {
+    Credentials(Credentials),
+}
+
+#[derive(Debug,PartialEq,Deserialize,Serialize)]
 pub struct Credentials {
     pub url:         String,
     pub login:       String,
@@ -28,13 +34,13 @@ pub fn credentials_directory(path: &str) -> PathBuf {
     BaseDirectories::with_prefix("mnemesis").expect("Failed getting base directories").place_data_file(path).expect("Failed computing credentials directory")
 }
 
-pub fn read_credentials(path: &str) -> Vec<Credentials> {
+pub fn read_entities(path: &str) -> Vec<Entity> {
     let full_path = credentials_directory(path);
 
     if full_path.exists() {
         if full_path.is_file() {
             let data = file::get_text(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path))).expect(&format!("Failed to read {:?}", full_path));
-            serde_json::from_str::<Vec<Credentials>>(&data).expect(&format!("Found garbage in {:?}", full_path))
+            serde_json::from_str::<Vec<Entity>>(&data).expect(&format!("Found garbage in {:?}", full_path))
         } else {
             panic!("{:?} exists and is not a file", full_path);
         }
@@ -43,8 +49,8 @@ pub fn read_credentials(path: &str) -> Vec<Credentials> {
     }
 }
 
-pub fn write_credentials(path: &str, credentials: Vec<&Credentials>) {
+pub fn write_entities(path: &str, entities: Vec<Entity>) {
     let full_path = credentials_directory(path);
 
-    file::put_text(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path)), serde_json::to_string(&credentials).expect("Failed to serialize credentials")).expect(&format!("Failed to write {:?}", full_path));
+    file::put_text(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path)), serde_json::to_string(&entities).expect("Failed to serialize entities")).expect(&format!("Failed to write {:?}", full_path));
 }
