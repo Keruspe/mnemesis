@@ -10,11 +10,16 @@ readme      = "README.md"
 name = "mn"
 path = "src/main.rs"
 
+[[bin]]
+name = "totpcli"
+path = "src/bin/totpcli.rs"
+
 [lib]
 name = "mnemesis_utils"
 
 [dependencies]
 base32       = "^0.3"
+base64       = "^0.7"
 clap         = "^2.0"
 file         = "^1.1"
 gpgme        = "^0.6"
