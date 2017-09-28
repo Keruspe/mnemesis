@@ -44,9 +44,10 @@ struct MnemesisConfig {
 
 impl MnemesisUtils {
     pub fn new() -> MnemesisUtils {
-        let base_dirs = BaseDirectories::with_prefix("mnemesis").expect("Failed getting base directories");
-        let config    = MnemesisConfig::load(&base_dirs, &Crypt::new(&MnemesisUtils::prompt_for_password("Passphrase: "), Algorithm::ChaCha20Poly1305));
-        let crypt     = Crypt::new(&config.secret, Algorithm::ChaCha20Poly1305);
+        let base_dirs  = BaseDirectories::with_prefix("mnemesis").expect("Failed getting base directories");
+        let passphrase = MnemesisUtils::prompt_for_password("Passphrase: ");
+        let config     = MnemesisConfig::load(&base_dirs, &Crypt::new(&passphrase, Algorithm::ChaCha20Poly1305), &passphrase);
+        let crypt      = Crypt::new(&config.secret, Algorithm::ChaCha20Poly1305);
 
         MnemesisUtils {
             base_dirs,
@@ -93,14 +94,21 @@ impl MnemesisUtils {
 }
 
 impl MnemesisConfig {
-    pub fn load(base_dirs: &BaseDirectories, crypt: &Crypt) -> MnemesisConfig {
+    pub fn load(base_dirs: &BaseDirectories, crypt: &Crypt, passphrase: &str) -> MnemesisConfig {
         base_dirs.find_config_file("mnemesis-config.json").and_then(|conf_file| {
             conf_file.to_str().and_then(|conf_file| file::get_text(conf_file).ok()).map(|encrypted_conf| crypt.decrypt(encrypted_conf))
         }).and_then(|conf| {
             serde_json::from_str::<MnemesisConfig>(&conf).ok()
-        }).unwrap_or(MnemesisConfig {
-            // FIXME: generate default config or error out?
-            secret: "".to_string(),
+        }).unwrap_or_else(|| {
+            let config = MnemesisConfig {
+                secret: passphrase.to_string(),
+            };
+            let decrypted_data = serde_json::to_string(&config).expect("Failed to serialize config");
+            let encrypted_data = crypt.encrypt(decrypted_data);
+            let full_path      = base_dirs.place_config_file("mnemesis-config.json").expect("Failed to create config file");
+
+            file::put(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path)), &encrypted_data).expect(&format!("Failed to write {:?}", full_path));
+            config
         })
     }
 }
