@@ -46,7 +46,7 @@ impl MnemesisUtils {
     pub fn new() -> MnemesisUtils {
         let base_dirs  = BaseDirectories::with_prefix("mnemesis").expect("Failed getting base directories");
         let passphrase = MnemesisUtils::prompt_for_password("Passphrase: ");
-        let config     = MnemesisConfig::load(&base_dirs, &Crypt::new(&passphrase, Algorithm::ChaCha20Poly1305), &passphrase);
+        let config     = MnemesisConfig::load(&base_dirs, &Crypt::new(&passphrase, Algorithm::ChaCha20Poly1305));
         let crypt      = Crypt::new(&config.secret, Algorithm::ChaCha20Poly1305);
 
         MnemesisUtils {
@@ -94,14 +94,14 @@ impl MnemesisUtils {
 }
 
 impl MnemesisConfig {
-    pub fn load(base_dirs: &BaseDirectories, crypt: &Crypt, passphrase: &str) -> MnemesisConfig {
+    pub fn load(base_dirs: &BaseDirectories, crypt: &Crypt) -> MnemesisConfig {
         base_dirs.find_config_file("mnemesis-config.json").and_then(|conf_file| {
             conf_file.to_str().and_then(|conf_file| file::get_text(conf_file).ok()).map(|encrypted_conf| crypt.decrypt(encrypted_conf))
         }).and_then(|conf| {
             serde_json::from_str::<MnemesisConfig>(&conf).ok()
         }).unwrap_or_else(|| {
             let config = MnemesisConfig {
-                secret: passphrase.to_string(),
+                secret: crypt.generate_passphrase(),
             };
             let decrypted_data = serde_json::to_string(&config).expect("Failed to serialize config");
             let encrypted_data = crypt.encrypt(decrypted_data);
@@ -151,10 +151,7 @@ impl FromStr for Algorithm {
 
 impl Crypt {
     fn new(passphrase: &str, algorithm: Algorithm) -> Crypt {
-        let salt      = username::get_user_name().expect("Failed to query username");
-        let mut key   = [0; 32];
-
-        pbkdf2::derive(&digest::SHA512, 100, salt.as_bytes(), passphrase.as_bytes(), &mut key);
+        let key = Self::derive(passphrase.as_bytes());
 
         Crypt {
             algorithm,
@@ -163,10 +160,21 @@ impl Crypt {
         }
     }
 
+    fn derive(bytes: &[u8]) -> [u8; 32] {
+        let salt    = username::get_user_name().expect("Failed to query username");
+        let mut key = [0; 32];
+        pbkdf2::derive(&digest::SHA512, 100, salt.as_bytes(), bytes, &mut key);
+        key
+    }
+
+    fn random(&self, bytes: usize) -> Vec<u8> {
+        let mut rand = vec![0; bytes];
+        self.rand.fill(&mut rand).expect("Failed generating random bytes");
+        rand
+    }
+
     fn nonce(&self) -> Vec<u8> {
-        let mut nonce = vec![0; 12];
-        self.rand.fill(&mut nonce).expect("Failed generating nonce");
-        nonce
+        self.random(12)
     }
 
     fn encrypt(&self, data: String) -> String {
@@ -200,6 +208,10 @@ impl Crypt {
         let decrypted_data           = aead::open_in_place(&opening_key, &nonce, &additional_data, 0, &mut data).expect("Failed opening data");
 
         String::from_utf8(decrypted_data.to_vec()).expect("Failed decoding data")
+    }
+
+    fn generate_passphrase(&self) -> String {
+        base64::encode(&Self::derive(self.random(64).as_ref()))
     }
 }
 
