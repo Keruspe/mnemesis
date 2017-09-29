@@ -33,7 +33,6 @@ pub struct Credentials {
 
 pub struct MnemesisUtils {
     base_dirs: BaseDirectories,
-    config:    MnemesisConfig,
     crypt:     Crypt,
 }
 
@@ -46,12 +45,11 @@ impl MnemesisUtils {
     pub fn new() -> MnemesisUtils {
         let base_dirs  = BaseDirectories::with_prefix("mnemesis").expect("Failed getting base directories");
         let passphrase = MnemesisUtils::prompt_for_password("Passphrase: ");
-        let config     = MnemesisConfig::load(&base_dirs, &Crypt::new(&passphrase, Algorithm::ChaCha20Poly1305));
-        let crypt      = Crypt::new(&config.secret, Algorithm::ChaCha20Poly1305);
+        let config     = MnemesisConfig::load(&base_dirs, &Crypt::new(&passphrase));
+        let crypt      = Crypt::new(&config.secret);
 
         MnemesisUtils {
             base_dirs,
-            config,
             crypt,
         }
     }
@@ -87,7 +85,7 @@ impl MnemesisUtils {
     pub fn write_entities(&self, path: &str, entities: Vec<Entity>) {
         let full_path      = self.credentials_directory(path);
         let decrypted_data = serde_json::to_string(&entities).expect("Failed to serialize entities");
-        let encrypted_data = self.crypt.encrypt(decrypted_data);
+        let encrypted_data = self.crypt.encrypt(decrypted_data, Algorithm::ChaCha20Poly1305);
 
         file::put(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path)), &encrypted_data).expect(&format!("Failed to write {:?}", full_path));
     }
@@ -104,7 +102,7 @@ impl MnemesisConfig {
                 secret: crypt.generate_passphrase(),
             };
             let decrypted_data = serde_json::to_string(&config).expect("Failed to serialize config");
-            let encrypted_data = crypt.encrypt(decrypted_data);
+            let encrypted_data = crypt.encrypt(decrypted_data, Algorithm::ChaCha20Poly1305);
             let full_path      = base_dirs.place_config_file("mnemesis-config.json").expect("Failed to create config file");
 
             file::put(full_path.to_str().expect(&format!("{:?} is not valid UTF-8", full_path)), &encrypted_data).expect(&format!("Failed to write {:?}", full_path));
@@ -114,9 +112,8 @@ impl MnemesisConfig {
 }
 
 struct Crypt {
-    algorithm: Algorithm,
-    key:       [u8; 32],
-    rand:      rand::SystemRandom,
+    key:  [u8; 32],
+    rand: rand::SystemRandom,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -144,17 +141,16 @@ impl FromStr for Algorithm {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "ChaCha20Poly1305" => Ok(Algorithm::ChaCha20Poly1305),
-            _                   => Err(format!("Unknown algorithm: {}", s)),
+            _                  => Err(format!("Unknown algorithm: {}", s)),
         }
     }
 }
 
 impl Crypt {
-    fn new(passphrase: &str, algorithm: Algorithm) -> Crypt {
+    fn new(passphrase: &str) -> Crypt {
         let key = Self::derive(passphrase.as_bytes());
 
         Crypt {
-            algorithm,
             key,
             rand: rand::SystemRandom::new(),
         }
@@ -177,8 +173,8 @@ impl Crypt {
         self.random(12)
     }
 
-    fn encrypt(&self, data: String) -> String {
-        let algorithm                = self.algorithm.aead_algorithm();
+    fn encrypt(&self, data: String, algo: Algorithm) -> String {
+        let algorithm                = algo.aead_algorithm();
         let sealing_key              = aead::SealingKey::new(&algorithm, &self.key).expect("Failed creating sealing key");
         let nonce                    = self.nonce();
         let additional_data: [u8; 0] = [];
@@ -190,7 +186,7 @@ impl Crypt {
 
         let encrypted_data = aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut data, algorithm.tag_len()).map(|len| data[..len].to_vec()).expect("Failed sealing data");
 
-        format!("{}:{}:{}:{}", SERIALIZATION_API, self.algorithm.to_string(), base64::encode(&nonce), base64::encode(&encrypted_data))
+        format!("{}:{}:{}:{}", SERIALIZATION_API, algo.to_string(), base64::encode(&nonce), base64::encode(&encrypted_data))
     }
 
     fn decrypt(&self, data: String) -> String {
@@ -198,9 +194,8 @@ impl Crypt {
 
         assert_eq!(components.len(),      SERIALIZATION_FIELDS);
         assert_eq!(components[0].parse(), Ok(SERIALIZATION_API));
-        assert_eq!(components[1].parse(), Ok(self.algorithm.clone())); // TODO: move me to param and use the read one
 
-        let algorithm                = self.algorithm.aead_algorithm();
+        let algorithm                = components[1].parse::<Algorithm>().expect("Unknown algorithm").aead_algorithm();
         let opening_key              = aead::OpeningKey::new(&algorithm, &self.key).expect("Failed creating opening key");
         let nonce                    = base64::decode(components[2]).expect("Failed to decode nonce");
         let mut data                 = base64::decode(components[3]).expect("Failed to decode data");
@@ -222,12 +217,12 @@ mod test {
     #[test]
     fn test_encrypt_decrypt() {
         let pass  = "This is a nice passphrase.";
-        let c     = Crypt::new(pass, Algorithm::ChaCha20Poly1305);
+        let c     = Crypt::new(pass);
         let data  = "Very secret data";
-        let e     = c.encrypt(data.to_string());
+        let e     = c.encrypt(data.to_string(), Algorithm::ChaCha20Poly1305);
         let e2    = e.clone();
 
         assert_eq!(c.decrypt(e), data);
-        assert_eq!(Crypt::new(pass, Algorithm::ChaCha20Poly1305).decrypt(e2), data);
+        assert_eq!(Crypt::new(pass).decrypt(e2), data);
     }
 }
