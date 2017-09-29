@@ -10,6 +10,7 @@ extern crate xdg;
 
 use ring::{aead, digest, pbkdf2, rand};
 use ring::rand::SecureRandom;
+use std::fmt::{self, Display};
 use std::str::FromStr;
 use std::path::PathBuf;
 use xdg::BaseDirectories;
@@ -129,9 +130,9 @@ impl Algorithm {
     }
 }
 
-impl ToString for Algorithm {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl Display for Algorithm {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{:?}", self)
     }
 }
 
@@ -186,7 +187,7 @@ impl Crypt {
 
         let encrypted_data = aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut data, algorithm.tag_len()).map(|len| data[..len].to_vec()).expect("Failed sealing data");
 
-        format!("{}:{}:{}:{}", SERIALIZATION_API, algo.to_string(), base64::encode(&nonce), base64::encode(&encrypted_data))
+        format!("{}:{}:{}:{}", SERIALIZATION_API, algo, base64::encode(&nonce), base64::encode(&encrypted_data))
     }
 
     fn decrypt(&self, data: String) -> String {
