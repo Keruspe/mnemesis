@@ -1,5 +1,7 @@
+extern crate base32;
 extern crate base64;
 extern crate file;
+extern crate oath;
 extern crate ring;
 extern crate rpassword;
 extern crate rprompt;
@@ -8,6 +10,7 @@ extern crate serde_json;
 extern crate username;
 extern crate xdg;
 
+use oath::{totp_raw_now, HashType};
 use ring::{aead, digest, pbkdf2, rand};
 use ring::rand::SecureRandom;
 use std::fmt::{self, Display};
@@ -24,12 +27,33 @@ pub enum Entity {
     Credentials(Credentials),
 }
 
+impl Display for Entity {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Entity::Credentials(ref credentials) => write!(fmt, "{}", credentials),
+        }
+    }
+}
+
 #[derive(Debug,PartialEq,Deserialize,Serialize)]
 pub struct Credentials {
     pub url:         String,
     pub login:       String,
     pub password:    String,
     pub totp_secret: Option<String>
+}
+
+impl Display for Credentials {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(fmt, "Url:      {}", self.url)?;
+        writeln!(fmt, "Login:    {}", self.login)?;
+        write!(fmt, "Password: {}", self.password)?;
+        if let Some(ref totp) = self.totp_secret {
+            writeln!(fmt)?;
+            write!(fmt, "TOTP:     {:06}", totp_raw_now(base32::decode(base32::Alphabet::RFC4648{ padding: false }, &totp).unwrap().as_ref(), 6, 0, 30, &HashType::SHA1))?;
+        }
+        Ok(())
+    }
 }
 
 pub struct MnemesisUtils {
@@ -65,6 +89,19 @@ impl MnemesisUtils {
 
     fn credentials_directory(&self, path: &str) -> PathBuf {
         self.base_dirs.place_data_file(path).expect("Failed computing credentials directory")
+    }
+
+    pub fn read_entity(&self, path: &str) -> Option<Entity> {
+        let mut entities = self.read_entities(path);
+
+        match entities.len() {
+            0 => None,
+            1 => Some(entities.remove(0)),
+            _ => {
+                // TODO: chooser
+                None
+            },
+        }
     }
 
     pub fn read_entities(&self, path: &str) -> Vec<Entity> {

@@ -2,9 +2,11 @@ use clap::{ArgMatches};
 use mnemesis_utils::{MnemesisUtils};
 
 pub fn _main(args: &ArgMatches) {
-    let path  = args.value_of("PATH").unwrap();
-    let utils = MnemesisUtils::new();
-    let list  = utils.read_entities(path);
+    let path   = args.value_of("PATH").unwrap();
+    let utils  = MnemesisUtils::new();
+    let entity = utils.read_entity(path);
 
-    println!("{:#?}", list);
+    if let Some(entity) = entity {
+        println!("{}", entity);
+    }
 }
