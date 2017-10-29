@@ -3,6 +3,7 @@ extern crate mnemesis_utils;
 
 mod add;
 mod get;
+mod mode;
 
 use clap::{App, Arg, SubCommand};
 
@@ -21,7 +22,13 @@ fn main() {
         .subcommand(SubCommand::with_name("get")
                     .about("Get some credentials from the registry")
                     .arg(Arg::with_name("PATH")
-                         .required(true)))
+                         .required(true))
+                    .arg(Arg::with_name("mode")
+                         .short("m")
+                         .long("mode")
+                         .takes_value(true)
+                         .possible_values(&["raw"])
+                         .default_value("raw")))
         .arg(Arg::with_name("PATH"))
         .get_matches();
 
