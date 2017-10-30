@@ -1,11 +1,14 @@
 extern crate clap;
 extern crate mnemesis_utils;
 
+mod action;
 mod add;
 mod get;
 mod mode;
 
 use clap::{App, Arg, SubCommand};
+
+use action::Action;
 
 fn main() {
     let matches = App::new(env!("CARGO_PKG_NAME"))
@@ -30,15 +33,19 @@ fn main() {
                          .possible_values(&["raw"])
                          .default_value("raw")))
         .arg(Arg::with_name("PATH"))
+        .arg(Arg::with_name("mode")
+             .short("m")
+             .long("mode")
+             .takes_value(true)
+             .possible_values(&["raw"])
+             .default_value("raw")
+             .requires("PATH"))
         .get_matches();
+    let action  = Action::from_matches(matches);
 
-    if let Some(sub) = matches.subcommand_matches("add") {
-        add::_main(sub);
-    } else if let Some(sub) = matches.subcommand_matches("get") {
-        get::_main(sub);
-    } else if matches.is_present("PATH") {
-        get::_main(&matches);
-    } else {
-        println!("{}", matches.usage());
+    match action {
+        Ok(Action::Add(g)) => add::_main(g),
+        Ok(Action::Get(g)) => get::_main(g),
+        Err(e)             => eprintln!("error: {}", e),
     }
 }
