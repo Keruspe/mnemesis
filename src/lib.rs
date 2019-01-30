@@ -15,6 +15,7 @@ use ring::{aead, digest, pbkdf2, rand};
 use ring::rand::SecureRandom;
 use std::fmt::{self, Display};
 use std::str::FromStr;
+use std::num::NonZeroU32;
 use std::path::PathBuf;
 use xdg::BaseDirectories;
 
@@ -197,7 +198,7 @@ impl Crypt {
     fn derive(bytes: &[u8]) -> [u8; 32] {
         let salt    = username::get_user_name().expect("Failed to query username");
         let mut key = [0; 32];
-        pbkdf2::derive(&digest::SHA512, 100, salt.as_bytes(), bytes, &mut key);
+        pbkdf2::derive(&digest::SHA512, NonZeroU32::new(100).unwrap(), salt.as_bytes(), bytes, &mut key);
         key
     }
 
@@ -215,16 +216,16 @@ impl Crypt {
         let algorithm                = algo.aead_algorithm();
         let sealing_key              = aead::SealingKey::new(&algorithm, &self.key).expect("Failed creating sealing key");
         let nonce                    = self.nonce();
-        let additional_data: [u8; 0] = [];
         let mut data                 = data.into_bytes();
 
         for _ in 0..algorithm.tag_len() {
             data.push(0);
         }
 
-        let encrypted_data = aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut data, algorithm.tag_len()).map(|len| data[..len].to_vec()).expect("Failed sealing data");
+        let base64_nonce = base64::encode(&nonce);
+        let encrypted_data = aead::seal_in_place(&sealing_key, aead::Nonce::try_assume_unique_for_key(&nonce).unwrap(), aead::Aad::empty(), &mut data, algorithm.tag_len()).map(|len| data[..len].to_vec()).expect("Failed sealing data");
 
-        format!("{}:{}:{}:{}", SERIALIZATION_API, algo, base64::encode(&nonce), base64::encode(&encrypted_data))
+        format!("{}:{}:{}:{}", SERIALIZATION_API, algo, base64_nonce, base64::encode(&encrypted_data))
     }
 
     fn decrypt(&self, data: String) -> String {
@@ -237,8 +238,7 @@ impl Crypt {
         let opening_key              = aead::OpeningKey::new(&algorithm, &self.key).expect("Failed creating opening key");
         let nonce                    = base64::decode(components[2]).expect("Failed to decode nonce");
         let mut data                 = base64::decode(components[3]).expect("Failed to decode data");
-        let additional_data: [u8; 0] = [];
-        let decrypted_data           = aead::open_in_place(&opening_key, &nonce, &additional_data, 0, &mut data).expect("Failed opening data");
+        let decrypted_data           = aead::open_in_place(&opening_key, aead::Nonce::try_assume_unique_for_key(&nonce).unwrap(), aead::Aad::empty(), 0, &mut data).expect("Failed opening data");
 
         String::from_utf8(decrypted_data.to_vec()).expect("Failed decoding data")
     }
