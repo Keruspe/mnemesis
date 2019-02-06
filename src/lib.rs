@@ -1,4 +1,4 @@
-#[warn(rust_2018_idioms)]
+#![warn(rust_2018_idioms)]
 
 use base32;
 use base64;
