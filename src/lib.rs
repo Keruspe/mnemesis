@@ -6,6 +6,7 @@ use oath::{totp_raw_now, HashType};
 use ring::{aead, digest, pbkdf2, rand::{self, SecureRandom}};
 use rpassword;
 use rprompt;
+use serde::{Deserialize,Serialize};
 use serde_json;
 use username;
 use xdg::BaseDirectories;
