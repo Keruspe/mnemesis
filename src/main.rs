@@ -1,5 +1,4 @@
-extern crate clap;
-extern crate mnemesis_utils;
+#[warn(rust_2018_idioms)]
 
 mod action;
 mod add;
@@ -8,7 +7,7 @@ mod mode;
 
 use clap::{App, Arg, SubCommand};
 
-use action::Action;
+use crate::action::Action;
 
 fn main() {
     let matches = App::new(env!("CARGO_PKG_NAME"))

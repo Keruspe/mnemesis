@@ -1,7 +1,7 @@
 use mnemesis_utils::{MnemesisUtils};
 
-use action::GetAction;
-use mode::Mode;
+use crate::action::GetAction;
+use crate::mode::Mode;
 
 pub fn _main(action: GetAction) {
     let path   = action.path;

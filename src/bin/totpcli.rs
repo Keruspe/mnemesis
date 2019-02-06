@@ -1,6 +1,6 @@
-extern crate base32;
-extern crate oath;
+#[warn(rust_2018_idioms)]
 
+use base32;
 use oath::{totp_raw_now, HashType};
 
 use std::env;

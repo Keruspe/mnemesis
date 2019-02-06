@@ -1,7 +1,8 @@
 use clap::ArgMatches;
+
 use std::str::FromStr;
 
-use mode::Mode;
+use crate::mode::Mode;
 
 pub enum Action {
     Add(AddAction),
@@ -19,7 +20,7 @@ pub struct GetAction {
 }
 
 impl Action {
-    pub fn from_matches(matches: ArgMatches) -> Result<Action, String> {
+    pub fn from_matches(matches: ArgMatches<'_>) -> Result<Action, String> {
         if let Some(sub) = matches.subcommand_matches("add") {
             Ok(Action::Add(AddAction {
                 path: sub.value_of("PATH").unwrap().to_string(),

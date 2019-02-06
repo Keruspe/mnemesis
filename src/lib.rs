@@ -1,23 +1,19 @@
-extern crate base32;
-extern crate base64;
-extern crate file;
-extern crate oath;
-extern crate ring;
-extern crate rpassword;
-extern crate rprompt;
-#[macro_use] extern crate serde_derive;
-extern crate serde_json;
-extern crate username;
-extern crate xdg;
+#[warn(rust_2018_idioms)]
 
+use base32;
+use base64;
 use oath::{totp_raw_now, HashType};
-use ring::{aead, digest, pbkdf2, rand};
-use ring::rand::SecureRandom;
+use ring::{aead, digest, pbkdf2, rand::{self, SecureRandom}};
+use rpassword;
+use rprompt;
+use serde_json;
+use username;
+use xdg::BaseDirectories;
+
 use std::fmt::{self, Display};
-use std::str::FromStr;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
-use xdg::BaseDirectories;
+use std::str::FromStr;
 
 const SERIALIZATION_API:    usize = 1;
 const SERIALIZATION_FIELDS: usize = 4;
@@ -29,7 +25,7 @@ pub enum Entity {
 }
 
 impl Display for Entity {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Entity::Credentials(ref credentials) => write!(fmt, "{}", credentials),
         }
@@ -45,7 +41,7 @@ pub struct Credentials {
 }
 
 impl Display for Credentials {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(fmt, "Url:      {}", self.url)?;
         writeln!(fmt, "Login:    {}", self.login)?;
         write!(fmt, "Password: {}", self.password)?;
@@ -169,7 +165,7 @@ impl Algorithm {
 }
 
 impl Display for Algorithm {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmt, "{:?}", self)
     }
 }

@@ -1,6 +1,6 @@
 use mnemesis_utils::{Credentials, Entity, MnemesisUtils};
 
-use action::AddAction;
+use crate::action::AddAction;
 
 pub fn _main(action: AddAction) {
     let url         = MnemesisUtils::prompt_for_input("Url: ");
