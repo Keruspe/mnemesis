@@ -18,11 +18,11 @@ matrix:
         - name: osx
           rust: nightly
           os: osx
-        - name: minimal-versions
-          rust: nightly
-          script:
-                - cargo -Z minimal-versions generate-lockfile
-                - cargo test --verbose --all
+#        - name: minimal-versions
+#          rust: nightly
+#          script:
+#                - cargo -Z minimal-versions generate-lockfile
+#                - cargo test --verbose --all
 
 script:
     - cargo build --verbose --all
