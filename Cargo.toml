@@ -20,7 +20,7 @@ name = "mnemesis_utils"
 
 [dependencies]
 base32     = "^0.4"
-base64     = "^0.10"
+base64     = "^0.13"
 clap       = "^2.0"
 file       = "^1.1"
 oath       = "^0.10"
